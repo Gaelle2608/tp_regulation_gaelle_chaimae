@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from turtlesim.msg import Pose
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool
 import math
  
 class SetWayPoint(Node):
@@ -18,6 +19,8 @@ class SetWayPoint(Node):
  
         # constante
         self.Kp = 2.0
+        self.kpl = 1.5
+        self.distance_tolerance = 0.1
  
         # subscriber
         self.subscriber = self.create_subscription(
@@ -45,12 +48,15 @@ class SetWayPoint(Node):
         xB = self.waypoint[0]
         yB = self.waypoint[1]
  
+        # distance euclidienne
+        distance = math.sqrt((xB - xA)**2 + (yB - yA)**2)
+
         # angle désiré
         theta_desired = math.atan2(yB - yA, xB - xA)
  
         # angle actuel
         theta = msg.theta
- 
+     
         # erreur
         error = math.atan(math.tan((theta_desired - theta) / 2))
  
@@ -59,11 +65,25 @@ class SetWayPoint(Node):
  
         # message cmd_vel
         cmd = Twist()
-        cmd.linear.x = 0.0
+
+        if distance > self.distance_tolerance:
+            cmd.linear.x = self.Kpl * distance
+        else:
+            cmd.linear.x = 0.0
+
         cmd.angular.z = u
- 
+
         self.publisher.publish(cmd)
- 
+
+        # publisher bool
+        is_moving_msg = Bool()
+        is_moving_msg.data = distance > self.distance_tolerance
+        self.is_moving_pub.publish(is_moving_msg)
+
+        # affichage
+        self.get_logger().info(
+            f"Distance: {distance:.2f}, Erreur: {error:.2f}, Commande: {u:.2f}"
+        ) 
         # affichage
         self.get_logger().info(f"Erreur: {error:.2f}, Commande: {u:.2f}")
  
@@ -74,8 +94,8 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
- 
- 
+
+
 if __name__ == '__main__':
     main()
  
